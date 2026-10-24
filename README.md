@@ -20,7 +20,7 @@ Not every player is available on every operating system. The table shows how the
 
 | Player | Windows | macOS | Linux |
 |---|---|---|---|
-| Plexamp | Media controls or Plex API | Plex API | MPRIS or Plex API |
+| Plexamp | Plexamp local API or Plex API | Plexamp local API or Plex API | Plexamp local API, MPRIS or Plex API |
 | Spotify | Media controls | AppleScript | MPRIS |
 | Apple Music | Media controls (Apple Music app or iTunes) | AppleScript (Music app) | Not available (no Linux app) |
 | foobar2000 | beefweb component | Not supported (the Mac version cannot load beefweb) | beefweb under Wine |
@@ -28,7 +28,9 @@ Not every player is available on every operating system. The table shows how the
 Notes:
 
 * "Media controls" is the Windows media overlay (GSMTC). A player must send its track to Windows for this to work.
-* The Plex API works on all operating systems. It is the most reliable source for Plexamp.
+* Plexamp desktop has a local player API on port 32500. The program reads it with no setup and no token. Plexamp does not report to the Windows media controls.
+* The Plex API reads Plexamp through your Plex Media Server. Use it when the local API is not available, for example for Plexamp on another device.
+* The program writes each media session that it ignores to the log. Use this to find the name of a player that does not match.
 * On Linux, Spotify sometimes reports position 0 through MPRIS. Then the progress bar can be wrong.
 
 ## The tray menu
@@ -102,14 +104,19 @@ The log file `log.txt` is in the same folder.
 
 ### 4. Set up the players
 
-**Plexamp through the Plex API**
+**Plexamp**
+
+Plexamp needs no setup. The program reads Plexamp desktop through `http://127.0.0.1:32500`.
+To turn this off, set `plexamp.enabled` to `false`.
+
+**Plexamp through the Plex API (optional)**
 
 1. Set `plex.enabled` to `true`.
 2. Set `server_url` to the address of your Plex Media Server.
 3. Set `token` to your Plex token. See [Finding an authentication token](https://support.plex.tv/articles/204059436).
 4. If other people use your server, set `username` to your Plex user name.
 
-The program never sends the Plex token to Discord. It gets album covers from the iTunes Search API.
+The program never sends the Plex token to Discord. It gets album covers from public sources instead (see "Album covers").
 
 **foobar2000**
 
@@ -129,13 +136,15 @@ On macOS, the first run shows a permission prompt. Allow the program to control 
 |---|---|---|
 | `discord.client_id` | empty | Your Discord Application ID |
 | `discord.client_ids` | empty | One Application ID for each player (optional) |
-| `discord.status_display` | `name` | The text in the member list: `name` (player), `details` (song title) or `state` (artist) |
+| `discord.status_display` | `state` | The text in the member list: `state` (artist), `details` (song title) or `name` (Discord application name) |
 | `discord.large_image_fallback` | empty | An asset key or HTTPS URL to show when no album cover is found |
 | `discord.show_player_icon` | `false` | Show a small player icon |
 | `general.poll_interval` | `2` | Seconds between checks |
 | `general.clear_on_pause` | `true` | Remove the presence when the music is paused |
 | `general.priority` | all four players | When more than one player is active, use the first player in this list |
-| `general.lookup_artwork` | `true` | Find album covers through the iTunes Search API |
+| `general.lookup_artwork` | `true` | Find album covers through iTunes and MusicBrainz |
+| `plexamp.enabled` | `true` | Read Plexamp through its local player API |
+| `plexamp.url` | `http://127.0.0.1:32500` | The address of the Plexamp local player API |
 
 ## How it works
 
@@ -145,6 +154,16 @@ On macOS, the first run shows a permission prompt. Allow the program to control 
 * Discord draws the progress bar from the start and end times. The program does not send each second.
 * If Discord is closed, the program connects again when Discord starts.
 
+## Album covers
+
+Discord can show only a cover with a public web address. Most players give no such address, so the program searches for the cover:
+
+1. The iTunes Search API, with the album artist and the album name.
+2. MusicBrainz and the Cover Art Archive, if iTunes has no match.
+
+The program uses a cover only when the album name matches. This prevents a wrong cover from a similar album.
+To see the cover that the program finds, run `NowPlayingRpc --once`.
+
 ## Platform notes
 
 * **Linux:** GNOME does not show tray icons by default. Install the "AppIndicator and KStatusNotifierItem Support" extension.
@@ -152,7 +171,7 @@ On macOS, the first run shows a permission prompt. Allow the program to control 
 
 ## Test from the command line
 
-This command prints the tracks that the program finds, and then stops:
+This command prints the tracks and covers that the program finds, and then stops:
 
 ```bash
 NowPlayingRpc --once

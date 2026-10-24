@@ -8,7 +8,7 @@ public sealed class DiscordConfig
     public string ClientId { get; set; } = "";
     public Dictionary<string, string> ClientIds { get; set; } = new();
     /// <summary>"name" (player), "details" (song title) or "state" (artist).</summary>
-    public string StatusDisplay { get; set; } = "name";
+    public string StatusDisplay { get; set; } = "state";
     public string LargeImageFallback { get; set; } = "";
     public bool ShowPlayerIcon { get; set; }
 }
@@ -24,6 +24,12 @@ public sealed class GeneralConfig
 public sealed class MediaSessionConfig
 {
     public bool Enabled { get; set; } = true;
+}
+
+public sealed class PlexampConfig
+{
+    public bool Enabled { get; set; } = true;
+    public string Url { get; set; } = "http://127.0.0.1:32500";
 }
 
 public sealed class PlexConfig
@@ -48,6 +54,7 @@ public sealed class Config
     public DiscordConfig Discord { get; set; } = new();
     public GeneralConfig General { get; set; } = new();
     public MediaSessionConfig MediaSession { get; set; } = new();
+    public PlexampConfig Plexamp { get; set; } = new();
     public PlexConfig Plex { get; set; } = new();
     public FoobarConfig Foobar2000 { get; set; } = new();
 

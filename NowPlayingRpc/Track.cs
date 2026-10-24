@@ -8,7 +8,8 @@ public sealed record Track(
     double? Duration = null,
     double? Position = null,
     bool Playing = true,
-    string? ArtUrl = null)
+    string? ArtUrl = null,
+    string AlbumArtist = "")
 {
     public static readonly IReadOnlyDictionary<string, string> PlayerNames = new Dictionary<string, string>
     {

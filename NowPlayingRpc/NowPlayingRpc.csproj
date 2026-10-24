@@ -24,6 +24,7 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.22" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
     <PackageReference Include="DiscordRichPresence" Version="1.6.1.70" />
     <!-- Avalonia.FreeDesktop uses this exact version. A different version can conflict on Linux. -->
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />

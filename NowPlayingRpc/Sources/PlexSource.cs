@@ -63,7 +63,8 @@ public sealed class PlexSource : ISource
                 Str(item, "parentTitle"),
                 duration,
                 duration != null ? offset : null,
-                state == "playing"));
+                state == "playing",
+                AlbumArtist: Str(item, "grandparentTitle")));
         }
         return result;
     }

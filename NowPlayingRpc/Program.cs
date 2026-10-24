@@ -23,6 +23,9 @@ internal static class Program
     {
         var config = Config.Load();
         foreach (var track in await Tracker.Collect(Sources.SourceFactory.Build(config)))
+        {
             Console.WriteLine(track);
+            Console.WriteLine($"  Cover: {track.ArtUrl ?? await Artwork.LookupAsync(track) ?? "(none found)"}");
+        }
     }
 }

@@ -10,11 +10,12 @@ public sealed class Tracker
     private readonly Presence _presence;
     private readonly CancellationTokenSource _stop = new();
     private Task? _loop;
-    private string _lastStatus = "";
+    private (string, string) _lastStatus;
     private volatile Config? _pending;
     private volatile bool _paused;
 
-    public event Action<string>? StatusChanged;
+    /// <summary>Raised with the track line and the Discord connection line.</summary>
+    public event Action<string, string>? StatusChanged;
 
     public bool Paused
     {
@@ -127,15 +128,17 @@ public sealed class Tracker
         _presence.Show(track, art);
 
         var prefix = track.Playing ? "" : "Paused · ";
-        var discord = _presence.Connected ? "" : " (Discord not connected)";
-        SetStatus($"{prefix}{track.PlayerName}: {track.Artist} – {track.Title}{discord}");
+        SetStatus($"{prefix}{track.PlayerName}: {track.Artist} – {track.Title}");
     }
 
-    private void SetStatus(string text)
+    private void SetStatus(string track)
     {
-        if (text == _lastStatus)
+        var discord = _config.Discord.ClientId.Length == 0 ? "Discord: not set up"
+            : _presence.Connected ? "Discord: connected"
+            : "Discord: not connected";
+        if ((track, discord) == _lastStatus)
             return;
-        _lastStatus = text;
-        StatusChanged?.Invoke(text);
+        _lastStatus = (track, discord);
+        StatusChanged?.Invoke(track, discord);
     }
 }

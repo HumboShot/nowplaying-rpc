@@ -32,6 +32,8 @@ public static class SourceFactory
             else if (OperatingSystem.IsLinux())
                 sources.Add(new MprisSource());
         }
+        if (config.Plexamp.Enabled)
+            sources.Add(new PlexampSource(config.Plexamp));
         if (config.Plex.Enabled)
             sources.Add(new PlexSource(config.Plex));
         if (config.Foobar2000.Enabled)

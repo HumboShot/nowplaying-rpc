@@ -58,7 +58,10 @@ public sealed class MprisSource : ISource
                 position != null && length > 0 ? position / 1_000_000.0 : null,
                 status == "Playing",
                 // Local file:// covers cannot reach Discord.
-                art.StartsWith("https://") ? art : null));
+                art.StartsWith("https://") ? art : null,
+                meta.TryGetValue("xesam:albumArtist", out var aa) && Unwrap(aa).Type == VariantValueType.Array
+                    ? string.Join(", ", Unwrap(aa).GetArray<string>())
+                    : ""));
         }
         return result;
     }

@@ -7,6 +7,7 @@ namespace NowPlayingRpc.Sources;
 public sealed class WindowsMediaSource : ISource
 {
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
+    private readonly HashSet<string> _ignored = [];
 
     public string Name => "windows_media";
 
@@ -18,7 +19,15 @@ public sealed class WindowsMediaSource : ISource
         {
             var player = SourceFactory.PlayerFromAppId(session.SourceAppUserModelId);
             if (player == null)
+            {
+                // Log each unknown app once, so a user can see the ID of a player that does not match.
+                if (_ignored.Add(session.SourceAppUserModelId))
+                {
+                    var info = await session.TryGetMediaPropertiesAsync();
+                    Log.Write($"Ignored media session: {session.SourceAppUserModelId} ({info?.Artist} - {info?.Title})");
+                }
                 continue;
+            }
             var status = session.GetPlaybackInfo().PlaybackStatus;
             if (status is not (GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
                 or GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused))
@@ -44,7 +53,8 @@ public sealed class WindowsMediaSource : ISource
                 props.AlbumTitle,
                 duration > 0 ? duration : null,
                 duration > 0 ? position : null,
-                playing));
+                playing,
+                AlbumArtist: props.AlbumArtist));
         }
         return result;
     }

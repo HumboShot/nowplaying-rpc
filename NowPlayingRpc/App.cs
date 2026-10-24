@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform;
+using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
 
 namespace NowPlayingRpc;
@@ -11,16 +12,21 @@ public sealed class App : Application
 {
     private Tracker? _tracker;
     private TrayIcon? _tray;
-    private NativeMenuItem? _status;
+    private NativeMenuItem? _trackStatus;
+    private NativeMenuItem? _discordStatus;
+
+    // On Windows, Avalonia draws the tray menu as its own popup, which has no look without a theme.
+    public override void Initialize() => Styles.Add(new FluentTheme());
 
     public override void OnFrameworkInitializationCompleted()
     {
         Log.Start();
         var config = Config.TryLoad();
         _tracker = new Tracker(config ?? new Config());
-        _tracker.StatusChanged += text => Dispatcher.UIThread.Post(() => ShowStatus(text));
+        _tracker.StatusChanged += (track, discord) => Dispatcher.UIThread.Post(() => ShowStatus(track, discord));
 
-        _status = new NativeMenuItem(config == null ? "Config error – see log" : "Starting…") { IsEnabled = false };
+        _trackStatus = new NativeMenuItem(config == null ? "Config error – see log" : "Starting…") { IsEnabled = false };
+        _discordStatus = new NativeMenuItem("Discord: not connected") { IsEnabled = false };
 
         // Use our own state, because some platforms toggle a check box item before Click.
         var pause = new NativeMenuItem("Pause presence") { ToggleType = NativeMenuItemToggleType.CheckBox };
@@ -50,14 +56,14 @@ public sealed class App : Application
             if (Config.TryLoad() is { } newConfig)
                 _tracker.Reload(newConfig);
             else
-                ShowStatus("Config error – see log");
+                ShowStatus("Config error – see log", _discordStatus.Header ?? "");
         };
 
         var openLog = new NativeMenuItem("Open log");
         openLog.Click += (_, _) => OpenFile(Log.FilePath);
 
-        var quit = new NativeMenuItem("Quit");
-        quit.Click += async (_, _) =>
+        var close = new NativeMenuItem("Close");
+        close.Click += async (_, _) =>
         {
             await _tracker.StopAsync();
             _tray?.Dispose();
@@ -72,7 +78,8 @@ public sealed class App : Application
             {
                 Items =
                 {
-                    _status,
+                    _trackStatus,
+                    _discordStatus,
                     new NativeMenuItemSeparator(),
                     pause,
                     autostart,
@@ -81,7 +88,7 @@ public sealed class App : Application
                     reload,
                     openLog,
                     new NativeMenuItemSeparator(),
-                    quit,
+                    close,
                 },
             },
             IsVisible = true,
@@ -92,13 +99,20 @@ public sealed class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private void ShowStatus(string text)
+    private void ShowStatus(string track, string discord)
     {
-        if (_status != null)
-            _status.Header = text;
+        if (_trackStatus != null)
+            _trackStatus.Header = track;
+        if (_discordStatus != null)
+            _discordStatus.Header = discord;
         if (_tray != null)
-            // Windows limits the tooltip to 127 characters.
-            _tray.ToolTipText = text.Length > 120 ? text[..120] + "…" : text;
+        {
+            // Windows limits the tooltip to 127 characters, so shorten the track line to fit.
+            var max = 126 - discord.Length - 1;
+            if (track.Length > max)
+                track = track[..(max - 1)] + "…";
+            _tray.ToolTipText = $"{track}\n{discord}";
+        }
     }
 
     private static void OpenFile(string path)

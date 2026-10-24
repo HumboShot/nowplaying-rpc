@@ -35,6 +35,8 @@ Notes:
 
 ## The tray menu
 
+Right-click or left-click the tray icon to open the menu. The menu is the native system menu on each operating system. On Windows, it follows the dark or light theme.
+
 | Item | What it does |
 |---|---|
 | Status line | Shows the current track, or why nothing shows |

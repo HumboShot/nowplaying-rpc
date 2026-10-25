@@ -1,13 +1,13 @@
 #if WINDOWS
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
-using Avalonia.Controls;
 
 namespace NowPlayingRpc;
 
 /// <summary>
-/// A tray icon with a native Windows menu. Avalonia draws its own popup for the tray menu on Windows,
-/// so this class calls Shell_NotifyIcon and TrackPopupMenuEx directly. It shows the items of an Avalonia
-/// NativeMenu and runs their Command, so the same menu works on macOS and Linux through Avalonia.
+/// The tray icon and its native menu on Windows. This class calls Shell_NotifyIcon and TrackPopupMenuEx
+/// directly and runs its own message loop. No UI toolkit is loaded, so the program does not start a
+/// GPU renderer, which uses a lot of memory.
 /// </summary>
 public sealed class Win32Tray : IDisposable
 {
@@ -15,22 +15,34 @@ public sealed class Win32Tray : IDisposable
     private const uint WM_CONTEXTMENU = 0x007B;
     private const uint WM_LBUTTONUP = 0x0202;
     private const uint WM_TRAY = 0x8000 + 1;
+    private const uint WM_RUN_QUEUE = 0x8000 + 2;
     private const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIM_SETVERSION = 4;
     private const uint NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4, NIF_SHOWTIP = 0x80;
     private const uint NOTIFYICON_VERSION_4 = 4;
     private const uint MF_GRAYED = 0x1, MF_CHECKED = 0x8, MF_SEPARATOR = 0x800;
     private const uint TPM_RIGHTBUTTON = 0x2, TPM_NONOTIFY = 0x80, TPM_RETURNCMD = 0x100;
 
-    private readonly NativeMenu _menu;
+    private readonly TrayController _controller;
+    private readonly ConcurrentQueue<Action> _queue = new();
     private readonly WndProc _wndProc;
     private readonly IntPtr _hwnd;
     private readonly IntPtr _icon;
     private readonly uint _taskbarCreated;
     private string _toolTip = "";
 
-    public Win32Tray(NativeMenu menu, byte[] iconPng)
+    /// <summary>Show the tray icon and run the message loop until the user selects Close.</summary>
+    public static void Run()
     {
-        _menu = menu;
+        using var tray = new Win32Tray();
+        while (GetMessageW(out var msg, IntPtr.Zero, 0, 0) > 0)
+        {
+            TranslateMessage(ref msg);
+            DispatchMessageW(ref msg);
+        }
+    }
+
+    private Win32Tray()
+    {
         AllowDarkMenus();
 
         // Keep the delegate in a field, so the garbage collector does not free it while Windows uses it.
@@ -48,20 +60,37 @@ public sealed class Win32Tray : IDisposable
         _hwnd = CreateWindowExW(0, className, className, 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, wc.hInstance, IntPtr.Zero);
         _taskbarCreated = RegisterWindowMessageW("TaskbarCreated");
 
-        var size = GetSystemMetrics(49); // SM_CXSMICON
-        _icon = CreateIconFromResourceEx(iconPng, (uint)iconPng.Length, true, 0x00030000, size, size, 0);
+        using (var png = Resources.Icon())
+        using (var buffer = new MemoryStream())
+        {
+            png.CopyTo(buffer);
+            var bytes = buffer.ToArray();
+            var size = GetSystemMetrics(49); // SM_CXSMICON
+            _icon = CreateIconFromResourceEx(bytes, (uint)bytes.Length, true, 0x00030000, size, size, 0);
+        }
+
+        _controller = new TrayController(Post);
+        _toolTip = _controller.ToolTip;
+        _controller.Changed += () => SetToolTip(_controller.ToolTip);
+        _controller.CloseRequested += () => PostQuitMessage(0);
         AddIcon();
+        _controller.Start();
     }
 
-    public string ToolTip
+    /// <summary>Run an action on the message loop thread. Other threads can call this.</summary>
+    private void Post(Action action)
     {
-        get => _toolTip;
-        set
-        {
-            _toolTip = value;
-            var data = NewData(NIF_TIP | NIF_SHOWTIP);
-            Shell_NotifyIconW(NIM_MODIFY, ref data);
-        }
+        _queue.Enqueue(action);
+        PostMessageW(_hwnd, WM_RUN_QUEUE, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    private void SetToolTip(string toolTip)
+    {
+        if (toolTip == _toolTip)
+            return;
+        _toolTip = toolTip;
+        var data = NewData(NIF_TIP | NIF_SHOWTIP);
+        Shell_NotifyIconW(NIM_MODIFY, ref data);
     }
 
     private void AddIcon()
@@ -87,6 +116,12 @@ public sealed class Win32Tray : IDisposable
 
     private IntPtr OnMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
+        if (msg == WM_RUN_QUEUE)
+        {
+            while (_queue.TryDequeue(out var action))
+                Safe(action);
+            return IntPtr.Zero;
+        }
         if (msg == WM_TRAY)
         {
             // With NOTIFYICON_VERSION_4, the low word of lParam holds the mouse event.
@@ -106,22 +141,22 @@ public sealed class Win32Tray : IDisposable
 
     private void ShowMenu()
     {
-        var items = _menu.Items;
+        var items = _controller.Items;
         var hMenu = CreatePopupMenu();
         for (var i = 0; i < items.Count; i++)
         {
-            if (items[i] is not NativeMenuItem item || items[i] is NativeMenuItemSeparator)
+            if (items[i] is not { } item)
             {
                 AppendMenuW(hMenu, MF_SEPARATOR, 0, null);
                 continue;
             }
             uint flags = 0;
-            if (!item.IsEnabled)
+            if (!item.Enabled)
                 flags |= MF_GRAYED;
-            if (item.ToggleType != NativeMenuItemToggleType.None && item.IsChecked)
+            if (item.IsCheckBox && item.Checked)
                 flags |= MF_CHECKED;
             // An "&" marks a keyboard shortcut in a Windows menu, so double it to show it as text.
-            AppendMenuW(hMenu, flags, (UIntPtr)(i + 1), (item.Header ?? "").Replace("&", "&&"));
+            AppendMenuW(hMenu, flags, (UIntPtr)(i + 1), item.Text.Replace("&", "&&"));
         }
 
         GetCursorPos(out var pt);
@@ -131,8 +166,21 @@ public sealed class Win32Tray : IDisposable
         PostMessageW(_hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero);
         DestroyMenu(hMenu);
 
-        if (id > 0 && items[id - 1] is NativeMenuItem chosen && chosen.Command?.CanExecute(chosen.CommandParameter) == true)
-            chosen.Command.Execute(chosen.CommandParameter);
+        if (id > 0 && items[id - 1]?.Click is { } click)
+            Safe(click);
+    }
+
+    // An exception that leaves a window procedure stops the program, so log it here.
+    private static void Safe(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception e)
+        {
+            Log.Write($"Error: {e}");
+        }
     }
 
     /// <summary>Make native menus follow the dark or light Windows theme.</summary>
@@ -203,6 +251,23 @@ public sealed class Win32Tray : IDisposable
         public int X;
         public int Y;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MSG
+    {
+        public IntPtr hwnd;
+        public uint message;
+        public IntPtr wParam;
+        public IntPtr lParam;
+        public uint time;
+        public POINT pt;
+        public uint lPrivate;
+    }
+
+    [DllImport("user32.dll")] private static extern int GetMessageW(out MSG msg, IntPtr hwnd, uint min, uint max);
+    [DllImport("user32.dll")] private static extern bool TranslateMessage(ref MSG msg);
+    [DllImport("user32.dll")] private static extern IntPtr DispatchMessageW(ref MSG msg);
+    [DllImport("user32.dll")] private static extern void PostQuitMessage(int exitCode);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern ushort RegisterClassExW(ref WNDCLASSEXW wc);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr CreateWindowExW(uint exStyle, string className, string windowName, uint style, int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);

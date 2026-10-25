@@ -26,11 +26,12 @@ public static class SourceFactory
         {
 #if WINDOWS
             sources.Add(new WindowsMediaSource());
-#endif
+#else
             if (OperatingSystem.IsMacOS())
                 sources.Add(new MacOSSource());
             else if (OperatingSystem.IsLinux())
                 sources.Add(new MprisSource());
+#endif
         }
         if (config.Plexamp.Enabled)
             sources.Add(new PlexampSource(config.Plexamp));

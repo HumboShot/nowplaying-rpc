@@ -12,7 +12,9 @@ It supports these players:
 * Apple Music
 * foobar2000
 
-The program is written in C# with .NET 10 and [Avalonia](https://avaloniaui.net) for the tray icon.
+The program is written in C# with .NET 10. On Windows, it makes the tray icon with the Windows API directly. On macOS and Linux, it uses [Avalonia](https://avaloniaui.net) for the tray icon.
+
+The program uses little memory: about 17 MB private memory on Windows when idle.
 
 ## Support matrix
 

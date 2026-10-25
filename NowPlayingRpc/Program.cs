@@ -1,4 +1,6 @@
+#if !WINDOWS
 using Avalonia;
+#endif
 
 namespace NowPlayingRpc;
 
@@ -13,10 +15,14 @@ internal static class Program
             return;
         }
 
+#if WINDOWS
+        Win32Tray.Run();
+#else
         AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .With(new MacOSPlatformOptions { ShowInDock = false })
             .StartWithClassicDesktopLifetime(args, Avalonia.Controls.ShutdownMode.OnExplicitShutdown);
+#endif
     }
 
     private static async Task PrintOnce()

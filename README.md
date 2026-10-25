@@ -182,3 +182,7 @@ NowPlayingRpc --once
 ```
 
 On Windows the program has no console window. Send the output to a pipe to see it, for example `NowPlayingRpc.exe --once | more`.
+
+## License
+
+This project uses the MIT License. See [LICENSE](LICENSE).

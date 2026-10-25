@@ -8,6 +8,7 @@ public static class Autostart
 {
     private const string Name = "NowPlayingRpc";
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 
     private static string ExePath => Environment.ProcessPath ?? "";
 
@@ -26,7 +27,7 @@ public static class Autostart
         get
         {
             if (OperatingSystem.IsWindows())
-                return WindowsValue() != null;
+                return WindowsEnabled();
             return File.Exists(OperatingSystem.IsMacOS() ? MacPlist : LinuxDesktopFile);
         }
     }
@@ -65,20 +66,34 @@ public static class Autostart
     }
 
     [SupportedOSPlatform("windows")]
-    private static object? WindowsValue()
+    private static bool WindowsEnabled()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKey);
-        return key?.GetValue(Name);
+        using var run = Registry.CurrentUser.OpenSubKey(RunKey);
+        using var approved = Registry.CurrentUser.OpenSubKey(ApprovedKey);
+        // The first byte is even (for example 02) when the entry is on, and odd (03) when the user turned it off
+        // in Task Manager or Settings.
+        return run?.GetValue(Name) != null
+            && approved?.GetValue(Name) is byte[] { Length: > 0 } state
+            && state[0] % 2 == 0;
     }
 
     [SupportedOSPlatform("windows")]
     private static void SetWindows(bool enabled)
     {
-        using var key = Registry.CurrentUser.CreateSubKey(RunKey);
+        using var run = Registry.CurrentUser.CreateSubKey(RunKey);
+        // Newer Windows 11 builds skip a Run entry that has no StartupApproved entry,
+        // so write both. This is the same entry that Task Manager writes when you enable an app.
+        using var approved = Registry.CurrentUser.CreateSubKey(ApprovedKey);
         if (enabled)
-            key.SetValue(Name, $"\"{ExePath}\"");
+        {
+            run.SetValue(Name, $"\"{ExePath}\"");
+            approved.SetValue(Name, new byte[] { 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, RegistryValueKind.Binary);
+        }
         else
-            key.DeleteValue(Name, false);
+        {
+            run.DeleteValue(Name, false);
+            approved.DeleteValue(Name, false);
+        }
     }
 
     private static void SetFile(string path, bool enabled, string content)

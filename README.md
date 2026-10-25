@@ -39,15 +39,18 @@ Notes:
 
 Right-click or left-click the tray icon to open the menu. The menu is the native system menu on each operating system. On Windows, it follows the dark or light theme.
 
+When you hover over the tray icon, it shows the current track and the Discord connection state.
+
 | Item | What it does |
 |---|---|
-| Status line | Shows the current track, or why nothing shows |
+| Track line | Shows the current track, or why nothing shows |
+| Discord line | Shows if the program is connected to Discord |
 | Pause presence | Removes the presence from Discord until you click it again |
 | Start with system | Starts the program when you log in |
 | Open config file | Opens the config file in your default editor |
 | Reload config | Reads the config file again after you change it |
 | Open log | Opens the log file |
-| Quit | Stops the program and removes the presence |
+| Close | Stops the program and removes the presence |
 
 ## Setup
 
@@ -55,11 +58,13 @@ Right-click or left-click the tray icon to open the menu. The menu is the native
 
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications).
 2. Click **New Application**.
-3. Give it a name, for example `Music`. Discord shows this name in "Listening to Music".
+3. Give it a name, for example `music`. Discord always shows this name in "Listening to …", so the name `music` gives "Listening to music". A program cannot change this text.
 4. Copy the **Application ID**.
 
-Optional: make one application for each player, for example `Plexamp` and `Spotify`.
-Put each ID in `client_ids` in the config. Then Discord shows "Listening to Plexamp" for Plexamp.
+To change the text later, rename the application. The Application ID stays the same. Discord can take a few minutes to show the new name.
+
+Optional: make one application for each player, for example `music on Plexamp` and `music on Spotify`.
+Put each ID in `client_ids` in the config. Then Discord shows "Listening to music on Plexamp" for Plexamp.
 
 Optional: upload player icons under **Rich Presence → Art Assets**.
 Use the keys `plexamp`, `spotify`, `apple_music` and `foobar2000`. Then set `show_player_icon` to `true`.
@@ -88,7 +93,7 @@ dotnet publish NowPlayingRpc -c Release -f net10.0 -r linux-x64 --self-contained
 
 The program is in `NowPlayingRpc/bin/Release/<framework>/<runtime>/publish/`.
 
-Important: on Windows, use the `net10.0-windows10.0.19041.0` framework. The plain `net10.0` build does not contain the Windows media controls source.
+Important: on Windows, use the `net10.0-windows10.0.19041.0` framework. The plain `net10.0` build is for macOS and Linux only. It does not contain the Windows media controls source or the native Windows tray menu.
 
 ### 3. Set the Application ID
 
@@ -147,8 +152,18 @@ On macOS, the first run shows a permission prompt. Allow the program to control 
 | `general.clear_on_pause` | `true` | Remove the presence when the music is paused |
 | `general.priority` | all four players | When more than one player is active, use the first player in this list |
 | `general.lookup_artwork` | `true` | Find album covers through iTunes and MusicBrainz |
+| `media_session.enabled` | `true` | Read players through Windows media controls, AppleScript on macOS or MPRIS on Linux |
 | `plexamp.enabled` | `true` | Read Plexamp through its local player API |
 | `plexamp.url` | `http://127.0.0.1:32500` | The address of the Plexamp local player API |
+| `plex.enabled` | `false` | Read Plexamp through your Plex Media Server |
+| `plex.server_url` | `http://127.0.0.1:32400` | The address of your Plex Media Server |
+| `plex.token` | empty | Your Plex token |
+| `plex.username` | empty | Show only the sessions of this Plex user. Leave empty for all users |
+| `plex.verify_tls` | `true` | Check the server certificate. Set to `false` for a self-signed certificate |
+| `foobar2000.enabled` | `true` | Read foobar2000 through the beefweb component |
+| `foobar2000.url` | `http://127.0.0.1:8880` | The address of beefweb |
+| `foobar2000.username` | empty | The beefweb user name, if you set one |
+| `foobar2000.password` | empty | The beefweb password, if you set one |
 
 ## How it works
 
@@ -169,6 +184,8 @@ The program uses a cover only when the album name matches. This prevents a wrong
 To see the cover that the program finds, run `NowPlayingRpc --once`.
 
 ## Platform notes
+
+* **Windows:** "Start with system" writes two registry entries: one under `Run` and one under `StartupApproved\Run`. Newer Windows 11 builds skip an app at login if the second entry is missing. You can also turn the app on or off in Task Manager → Startup apps. The check mark in the menu follows that setting.
 
 * **Linux:** GNOME does not show tray icons by default. Install the "AppIndicator and KStatusNotifierItem Support" extension.
 * **macOS:** The program does not show a Dock icon. Use the menu bar icon.
